@@ -56,6 +56,7 @@ export async function createTestingApp(): Promise<INestApplication> {
 }
 
 export async function clearDatabase(dataSource: DataSource): Promise<void> {
+  await dataSource.query('TRUNCATE TABLE "comments" RESTART IDENTITY CASCADE');
   await dataSource.query(
     'TRUNCATE TABLE "content_reports" RESTART IDENTITY CASCADE',
   );

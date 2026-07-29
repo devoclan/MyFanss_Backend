@@ -5,6 +5,7 @@ import { clearDatabase, createE2eApp, E2eTestApp } from './helpers/e2e-app';
 import { bearerToken, signupUser, loginUser } from './helpers/auth';
 import { ContentReport } from '../src/moderation/content-report.entity';
 import { Post } from '../src/posts/post.entity';
+import { Comment } from '../src/comments/comment.entity';
 import { ReportStatus } from '../src/moderation/enums/report-status.enum';
 import { ReportTargetType } from '../src/moderation/enums/report-target-type.enum';
 
@@ -12,6 +13,7 @@ describe('Content Moderation Reports (e2e)', () => {
   let testApp: E2eTestApp;
   let contentReportRepository: Repository<ContentReport>;
   let postRepository: Repository<Post>;
+  let commentRepository: Repository<Comment>;
 
   let reporterToken: string;
   let reporterId: number;
@@ -29,6 +31,9 @@ describe('Content Moderation Reports (e2e)', () => {
     >(getRepositoryToken(ContentReport));
     postRepository = testApp.moduleFixture.get<Repository<Post>>(
       getRepositoryToken(Post),
+    );
+    commentRepository = testApp.moduleFixture.get<Repository<Comment>>(
+      getRepositoryToken(Comment),
     );
   });
 
@@ -112,13 +117,41 @@ describe('Content Moderation Reports (e2e)', () => {
         .expect(404);
     });
 
-    it('returns 404 for comment targets, since comments do not exist yet', async () => {
+    it('creates an open report for an existing comment', async () => {
+      const comment = await commentRepository.save(
+        commentRepository.create({
+          postId,
+          authorId: reporterId,
+          body: 'Some comment',
+          parentId: null,
+        }),
+      );
+
+      const res = await request(server())
+        .post('/reports')
+        .set('Authorization', bearerToken(reporterToken))
+        .send({
+          targetType: ReportTargetType.COMMENT,
+          targetId: comment.id,
+          reason: 'Contains harassment',
+        })
+        .expect(201);
+
+      expect(res.body).toMatchObject({
+        reporterId,
+        targetType: ReportTargetType.COMMENT,
+        targetId: comment.id,
+        status: ReportStatus.OPEN,
+      });
+    });
+
+    it('returns 404 for comment targets that do not exist', async () => {
       await request(server())
         .post('/reports')
         .set('Authorization', bearerToken(reporterToken))
         .send({
           targetType: ReportTargetType.COMMENT,
-          targetId: 1,
+          targetId: 999999,
           reason: 'Contains harassment',
         })
         .expect(404);

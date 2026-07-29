@@ -21,6 +21,7 @@ import { AdminModule } from './admin/admin.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { UploadsModule } from './uploads/uploads.module';
 import { ModerationModule } from './moderation/moderation.module';
+import { CommentsModule } from './comments/comments.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { ModerationModule } from './moderation/moderation.module';
     AdminModule,
     UploadsModule,
     ModerationModule,
+    CommentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

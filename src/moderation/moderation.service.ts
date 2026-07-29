@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ContentReport } from './content-report.entity';
 import { Post } from '../posts/post.entity';
+import { Comment } from '../comments/comment.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/audit-action.enum';
 import { ReportTargetType } from './enums/report-target-type.enum';
@@ -22,6 +23,8 @@ export class ModerationService {
     private readonly reportsRepository: Repository<ContentReport>,
     @InjectRepository(Post)
     private readonly postsRepository: Repository<Post>,
+    @InjectRepository(Comment)
+    private readonly commentsRepository: Repository<Comment>,
     private readonly auditService: AuditService,
   ) {}
 
@@ -127,8 +130,11 @@ export class ModerationService {
       return;
     }
 
-    // Comments do not exist as an entity in this codebase yet, so every
-    // comment target is treated as missing.
-    throw new NotFoundException('Reported comment not found');
+    const comment = await this.commentsRepository.findOne({
+      where: { id: targetId },
+    });
+    if (!comment || comment.deletedAt !== null) {
+      throw new NotFoundException('Reported comment not found');
+    }
   }
 }

@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { ModerationService } from './moderation.service';
 import { ContentReport } from './content-report.entity';
 import { Post } from '../posts/post.entity';
+import { Comment } from '../comments/comment.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/audit-action.enum';
 import { ReportTargetType } from './enums/report-target-type.enum';
@@ -15,6 +16,7 @@ describe('ModerationService', () => {
   let service: ModerationService;
   let reportsRepository: Repository<ContentReport>;
   let postsRepository: Repository<Post>;
+  let commentsRepository: Repository<Comment>;
 
   const mockReportsRepository = {
     findOne: jest.fn(),
@@ -24,6 +26,10 @@ describe('ModerationService', () => {
   };
 
   const mockPostsRepository = {
+    findOne: jest.fn(),
+  };
+
+  const mockCommentsRepository = {
     findOne: jest.fn(),
   };
 
@@ -40,6 +46,10 @@ describe('ModerationService', () => {
           useValue: mockReportsRepository,
         },
         { provide: getRepositoryToken(Post), useValue: mockPostsRepository },
+        {
+          provide: getRepositoryToken(Comment),
+          useValue: mockCommentsRepository,
+        },
         { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
@@ -49,6 +59,9 @@ describe('ModerationService', () => {
       getRepositoryToken(ContentReport),
     );
     postsRepository = module.get<Repository<Post>>(getRepositoryToken(Post));
+    commentsRepository = module.get<Repository<Comment>>(
+      getRepositoryToken(Comment),
+    );
   });
 
   afterEach(() => {
@@ -95,7 +108,54 @@ describe('ModerationService', () => {
       expect(reportsRepository.findOne).not.toHaveBeenCalled();
     });
 
-    it('throws 404 for comment targets, since comments do not exist yet', async () => {
+    it('creates a report when the target comment exists', async () => {
+      (commentsRepository.findOne as jest.Mock).mockResolvedValue({
+        id: 42,
+        deletedAt: null,
+      });
+      (reportsRepository.findOne as jest.Mock).mockResolvedValue(null);
+      (reportsRepository.create as jest.Mock).mockReturnValue({
+        reporterId: 1,
+        ...dto,
+        targetType: ReportTargetType.COMMENT,
+        status: ReportStatus.OPEN,
+      });
+      (reportsRepository.save as jest.Mock).mockResolvedValue({
+        id: 1,
+        reporterId: 1,
+        ...dto,
+        targetType: ReportTargetType.COMMENT,
+        status: ReportStatus.OPEN,
+      });
+
+      const result = await service.createReport(1, {
+        ...dto,
+        targetType: ReportTargetType.COMMENT,
+      });
+
+      expect(commentsRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 42 },
+      });
+      expect(result.status).toBe(ReportStatus.OPEN);
+    });
+
+    it('throws 404 for comment targets that do not exist', async () => {
+      (commentsRepository.findOne as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.createReport(1, {
+          ...dto,
+          targetType: ReportTargetType.COMMENT,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws 404 for soft-deleted comment targets', async () => {
+      (commentsRepository.findOne as jest.Mock).mockResolvedValue({
+        id: 42,
+        deletedAt: new Date(),
+      });
+
       await expect(
         service.createReport(1, {
           ...dto,
